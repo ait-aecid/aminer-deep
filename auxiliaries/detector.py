@@ -22,7 +22,11 @@ class Detector:
     """
     def load_model(self):
         model = self.model.to(self.device)
-        model.load_state_dict(torch.load(self.model_path)["state_dict"])
+        try:
+            model.load_state_dict(torch.load(self.model_path)["state_dict"])
+        except FileNotFoundError as err:
+            print("Model not found, cannot load model")
+            return None
         model.eval()
         print("model_path: {}".format(self.model_path))
         return model

@@ -1,0 +1,71 @@
+LearnMode: True
+
+LogResourceList:
+    - 'file:///home/ubuntu/aminer-deep/data/hdfs_xu/sorted.log'
+
+Parser:
+  - id: HDFSParsingModel
+    type: HDFSParsingModel
+    name: 'hdfs'
+    start: True
+
+Input:
+    timestamp_paths: "/hdfs/time"
+
+Analysis:
+   - type: ParserCount
+     id: ParserCount
+     output_event_handlers:
+       - "stpe"
+     report_interval: 5
+
+   - type: DeepLearningFeatureExtractor
+     id: DeepLearningFeatureExtractor
+     window_size: 10
+     group_by_list:
+       - "/hdfs/type/access/blk"
+       - "/hdfs/type/adding/blk"
+       - "/hdfs/type/cannot/blk"
+       - "/hdfs/type/changing/blk"
+       - "/hdfs/type/del/blk"
+       - "/hdfs/type/deleting/blk"
+       - "/hdfs/type/empty/blk"
+       - "/hdfs/type/ex_r/blk"
+       - "/hdfs/type/ex_wr/blk"
+       - "/hdfs/type/exception/blk"
+       - "/hdfs/type/failed/blk"
+       - "/hdfs/type/invalidset/blk"
+       - "/hdfs/type/neededrep/blk"
+       - "/hdfs/type/no_file/blk"
+       - "/hdfs/type/packetresponder/type/ex/blk"
+       - "/hdfs/type/packetresponder/type/nonex/blk"
+       - "/hdfs/type/pending/blk"
+       - "/hdfs/type/received/blk"
+       - "/hdfs/type/receiving/blk"
+       - "/hdfs/type/redun/blk"
+       - "/hdfs/type/reopen/blk"
+       - "/hdfs/type/repl/blk"
+       - "/hdfs/type/serving/blk"
+       - "/hdfs/type/thread/blk"
+       - "/hdfs/type/trans/blk"
+       - "/hdfs/type/upd/blk"
+       - "/hdfs/type/verification/blk"
+       - "/hdfs/type/vmap/blk"
+       - "/hdfs/type/writeblock/blk"
+     publisher_address: "tcp://127.0.0.1:5560"
+     subscriber_address: "tcp://127.0.0.1:5559"
+     publisher_topic: "aminer"
+     subscriber_topic: "deep-aminer"
+     learn_mode: True
+     event_encoding: False
+
+EventHandlers:
+    - id: "stpe"
+      type: "StreamPrinterEventHandler"
+      json: True
+
+      #    - id: 'stpefile'
+      #type: 'StreamPrinterEventHandler'
+      #json: true
+      #pretty: true
+      #output_file_path: '/tmp/aminer_out.log'
