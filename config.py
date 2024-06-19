@@ -4,9 +4,9 @@ Overall configration file, used by the detector_launcher.py and zmqproxy.py
 options = dict()
 
 # data configration data_save_dir is dir where the logs will be stored if io mode is True
-options["data_save_dir"] = "/home/ubuntu/aminer-deep/data/"
+#options["data_save_dir"] = "/home/ubuntu/aminer-deep/data/"
 # the file will be used for tranning
-options['data_file_name'] = "Ex03_dnsmask/125009"
+#options['data_file_name'] = "Ex03_dnsmask/125009"
 options["device"] = "cpu"
 
 # currently support one feature, sequentials
@@ -23,17 +23,17 @@ options["batch_size"] = 2048
 options["accumulation_step"] = 1
 options["optimizer"] = "adam"
 options["lr"] = 0.001
-options["max_epoch"] = 100
+options["max_epoch"] = 10
 options["lr_step"] = (300, 350)
 options["lr_decay_ratio"] = 0.1
 options["resume_path"] = None
 options["model_name"] = "dnsmask"
-options["save_dir"] = "/home/ubuntu/aminer-deep/result/aminer-deep/ex03-dns/"
+options["save_dir"] = "/home/ubuntu/aminer-deep/result/"
 
 # Detector
 options[
     "model_path"
-] = "/home/ubuntu/aminer-deep/result/aminer-deep/ex03-dns/dnsmask_last.pth"
+] = "/home/ubuntu/aminer-deep/result/aminer-deep/result/deeplog_last.pth"
 options["num_candidates"] = 1
 
 

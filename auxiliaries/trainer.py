@@ -25,8 +25,8 @@ class Trainer():
     def __init__(self, model, options):
         self.model_name = options['model_name']
         self.save_dir = options['save_dir']
-        self.data_dir = options['data_save_dir']
-        self.data_file = options['data_file_name']
+        #self.data_dir = options['data_save_dir']
+        #self.data_file = options['data_file_name']
         self.batch_size = options['batch_size']
         self.device = options['device']
         self.lr_step = options['lr_step']
@@ -36,29 +36,29 @@ class Trainer():
         self.sequentials = options['sequentials']
         self.num_classes = options['num_classes']
 
-        os.makedirs(self.save_dir, exist_ok=True)
-        result, lables, groups = load_data(self.data_dir +  self.data_file)
-        train_logs, train_labels, train_groups, test_logs, test_labels, test_groups = data_sampling(result, lables, groups, 0.2)
+        #os.makedirs(self.save_dir, exist_ok=True)
+        #result, lables, groups = load_data(self.data_dir +  self.data_file)
+        #train_logs, train_labels, train_groups, test_logs, test_labels, test_groups = data_sampling(result, lables, groups, 0.2)
     
-        train_dataset = log_dataset(logs=train_logs,
-                                    labels=train_labels,
-                                    seq=self.sequentials)
-        valid_dataset = log_dataset(logs=test_logs,
-                                    labels=test_labels,
-                                    seq=self.sequentials)
+        #train_dataset = log_dataset(logs=train_logs,
+        #                            labels=train_labels,
+        #                            seq=self.sequentials)
+        #valid_dataset = log_dataset(logs=test_logs,
+        #                            labels=test_labels,
+        #                            seq=self.sequentials)
 
-        del result, lables, groups
-        del train_logs, train_labels, train_groups, test_logs, test_labels, test_groups
-        gc.collect()
+        #del result, lables, groups
+        #del train_logs, train_labels, train_groups, test_logs, test_labels, test_groups
+        #gc.collect()
 
-        self.train_loader = DataLoader(train_dataset,
-                                       batch_size=self.batch_size,
-                                       shuffle=True,
-                                       pin_memory=True)
-        self.valid_loader = DataLoader(valid_dataset,
-                                       batch_size=self.batch_size,
-                                       shuffle=False,
-                                       pin_memory=True)
+        #self.train_loader = DataLoader(train_dataset,
+        #                               batch_size=self.batch_size,
+        #                               shuffle=True,
+        #                               pin_memory=True)
+        #self.valid_loader = DataLoader(valid_dataset,
+        #                               batch_size=self.batch_size,
+        #                               shuffle=False,
+        #                               pin_memory=True)
 
 
         self.model = model.to(self.device)
@@ -127,7 +127,7 @@ class Trainer():
         except:
             print("Failed to save logs")
 
-    def train(self, epoch):
+    def train(self, epoch, data, labels):
         self.log['train']['epoch'].append(epoch)
         start = time.strftime("%H:%M:%S")
         lr = self.optimizer.state_dict()['param_groups'][0]['lr']
@@ -139,10 +139,18 @@ class Trainer():
         #Call optimizer.zero_grad() to reset the gradients of model parameters. Gradients by default add up; to prevent double-counting, we explicitly zero them at each iteration.
         self.optimizer.zero_grad()
         criterion = nn.CrossEntropyLoss()
-        tbar = tqdm(self.train_loader, desc="\r")
-        num_batch = len(self.train_loader)
+        train_dataset = log_dataset(logs=data,
+                                    labels=labels,
+                                    seq=self.sequentials)
+        train_loader = DataLoader(train_dataset,
+                                  batch_size=self.batch_size,
+                                  shuffle=True,
+                                  pin_memory=True)
+        tbar = tqdm(train_loader, desc="\r")
+        num_batch = len(train_loader)
         total_losses = 0
         for i, (log, label) in enumerate(tbar):
+            #print(str(log) + ' -> ' + str(label))
             features = []
             for value in log.values():
                 features.append(value.clone().detach().to(self.device))
@@ -161,7 +169,7 @@ class Trainer():
 
         self.log['train']['loss'].append(total_losses / num_batch)
 
-    def valid(self, epoch):
+    def valid(self, epoch, data, labels):
         self.model.eval()
         self.log['valid']['epoch'].append(epoch)
         lr = self.optimizer.state_dict()['param_groups'][0]['lr']
@@ -171,8 +179,15 @@ class Trainer():
         self.log['valid']['time'].append(start)
         total_losses = 0
         criterion = nn.CrossEntropyLoss()
-        tbar = tqdm(self.valid_loader, desc="\r")
-        num_batch = len(self.valid_loader)
+        valid_dataset = log_dataset(logs=data,
+                                    labels=labels,
+                                    seq=self.sequentials)
+        valid_loader = DataLoader(valid_dataset,
+                                  batch_size=self.batch_size,
+                                  shuffle=True,
+                                  pin_memory=True)
+        tbar = tqdm(valid_loader, desc="\r")
+        num_batch = len(valid_loader)
         for i, (log, label) in enumerate(tbar):
             with torch.no_grad():
                 features = []
@@ -190,7 +205,7 @@ class Trainer():
                                  save_optimizer=False,
                                  suffix="bestloss")
 
-    def start_train(self):
+    def start_train(self, data, labels):
         for epoch in range(self.start_epoch, self.max_epoch):
             if epoch == 0:
                 self.optimizer.param_groups[0]['lr'] /= 32
@@ -198,14 +213,14 @@ class Trainer():
                 self.optimizer.param_groups[0]['lr'] *= 2
             if epoch in self.lr_step:
                 self.optimizer.param_groups[0]['lr'] *= self.lr_decay_ratio
-            self.train(epoch)
+            self.train(epoch, data, labels)
             #self.valid(epoch)
             #hdfs             if epoch >= self.max_epoch // 2 and epoch % 10 == 0:
-            if epoch >= self.max_epoch // 2 and epoch % 2 == 0:
-                self.valid(epoch)
-                self.save_checkpoint(epoch,
-                                     save_optimizer=True,
-                                     suffix="epoch" + str(epoch))
+            #if epoch >= self.max_epoch // 2 and epoch % 2 == 0:
+            #    self.valid(epoch, data, labels)
+            #    self.save_checkpoint(epoch,
+            #                         save_optimizer=True,
+            #                         suffix="epoch" + str(epoch))
             self.save_checkpoint(epoch, save_optimizer=True, suffix="last")
             self.save_log()
 

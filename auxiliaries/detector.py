@@ -40,9 +40,10 @@ class Detector:
     def detect_anomaly(self, model, seq, label):
         with torch.no_grad():
             seq1 = [0] * self.num_classes  #
-            log_conuter = Counter(seq)  #
-            for key in log_conuter:
-                seq1[key] = log_conuter[key]
+            print(seq)
+            log_counter = Counter(seq)  #
+            for key in log_counter:
+                seq1[key] = log_counter[key]
 
             seq = (
                 torch.tensor(seq, dtype=torch.float)
