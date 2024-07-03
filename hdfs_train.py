@@ -29,6 +29,9 @@ with open('data/hdfs_xu/sorted.log') as f, open('data/hdfs_xu/train.log', 'w+') 
         blkfound = False
         for part in parts:
             part = part.strip("\n\r.")
+            part = part.replace("`/mnt/hadoop/dfs/data/tmp/", "")
+            part = part.replace(".meta':", "")
+            part = part.replace("':", "")
             if part.startswith('blk_'):
                 blkfound = True
                 if part in anom:
@@ -41,5 +44,6 @@ with open('data/hdfs_xu/sorted.log') as f, open('data/hdfs_xu/train.log', 'w+') 
                         break
                 else:
                     print(part)
+                continue
         if blkfound == False:
             print(line)

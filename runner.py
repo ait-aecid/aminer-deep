@@ -135,10 +135,13 @@ if __name__ == "__main__":
     #trainer = Trainer(dl_model, options)
     #model = trainer.load_model()
     window = 10
+    timeout = 3600 * 24
     num_predicted = 10
     batch_size = 32
     save_path = 'lstm_predictor.pth'
     seqs = {}
+    most_recent = {}
+    #interrupted_seqs = 0
     context = zmq.Context()
     zmq_pub_endpoint = "tcp://127.0.0.1:5559"
     zmq_sub_endpoint = "tcp://127.0.0.1:5560"
@@ -152,25 +155,32 @@ if __name__ == "__main__":
     #data = {'Sequentials': []}
     #labels = []
     train_data = []
-    unique_events = set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) # set() # for output_dim
+    unique_events = set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]) # set([0]) # for output_dim
     last_num_unique_events = len(unique_events)
+    next_check_time = None
     model = None
+    print_time = 3
+    tot_cnt = 0
+    unique_train_vectors = set() # delete this
     print('Lets go')
     try:
-        i = 0
+        next_print_time = time.time() + print_time
         while True:
             #print("Waiting for the AMiner output.......")
             #msg = testdata[i]
             msg = zmq_sub_socket.recv_string()
+            tot_cnt += 1
             #print(msg)
-            i += 1
             #if msg == options["zmq_aminer_top"] + ':connection_ack1':
             #    zmq_pub_socket.send_string("{}:{}".format(options["zmq_detector_top"], "connection_ack2"))
-            top, group, learn_mode, event = msg.split(":")
+            top, group, learn_mode, timestamp, event = msg.split(":")
+            event = int(event) + 1 # shift by 1 so that 0 is free for ending of seq
             #seq = seq.replace("[", "").replace("]", "").replace(",", "").replace("\"", "").split(" ")
             #seq_list = [[int(x)] for x in seq] # Trainer expects data in this format
             #seq = [int(x) for x in seq]
+            timestamp = float(timestamp)
             unique_events.add(int(event))
+            most_recent[group] = timestamp
             if group not in seqs:
                 seqs[group] = [[-1]] * window + [[int(event)]]
             else:
@@ -182,8 +192,41 @@ if __name__ == "__main__":
             #for group, seq in seqs.items():
             #    print(str(group) + ': ' + str(len(seq)))
             #print("")
+            timeout_groups = []
+            #mmax = -99999999999999
+            if next_check_time is None:
+                next_check_time = timestamp + timeout
+            if next_check_time < timestamp:
+                next_check_time = timestamp + timeout
+                print(next_check_time)
+                for g, t in most_recent.items():
+                    #print('current=' + str(timestamp) + ', last=' + str(t))
+                    #mmax = max(mmax, timestamp - timeout - t)
+                    #if g == "('blk_-1608999687919862906',)":
+                    #    print(str(i) + ' ' + str(t) + ' ' + str(timestamp - t))
+                    if g not in seqs:
+                        #interrupted_seqs += 1
+                        #if interrupted_seqs % 100 == 0:
+                        #    print('Interrupted: ' + str(interrupted_seqs))
+                        seqs[g] = [[-1]] * window + [[int(event)]]
+                    if t < timestamp - timeout:
+                        seqs[g].append([0])
+                        seqs[g] = seqs[g][-window:]
+                        timeout_groups.append(g)
+            #print(mmax)
             if learn_mode == "1":
                 train_data.append(copy.deepcopy(seqs[group])) #[:-1])
+                tmp = tuple([x for xs in seqs[group] for x in xs])
+                if tmp not in unique_train_vectors:
+                    pass
+                    #print("a " + str(len(unique_train_vectors)) + ': ' + str(tmp))
+                unique_train_vectors.add(tmp)
+                for timeout_group in timeout_groups:
+                    train_data.append(copy.deepcopy(seqs[timeout_group]))
+                    tmp = tuple([x for xs in seqs[timeout_group] for x in xs])
+                    if tmp not in unique_train_vectors:
+                        print("b " + str(timeout_group) + ' ' + str(len(unique_train_vectors)) + ': ' + str(tmp))
+                    unique_train_vectors.add(tmp)
                 #train_labels.append(seqs[group][-1])
                 #data.append((seq[:-1], seq[-1]))
                 #print(seqs[group])
@@ -216,46 +259,65 @@ if __name__ == "__main__":
                     #print(losses)
                     train_data = []
                 #print([seqs[group]])
-                data_tensor = torch.FloatTensor([seqs[group]])
-                input_sequences = data_tensor[:, :-1, :]
-                labels = data_tensor[:, -1, :].squeeze(-1).long()
-                anomalies, debugstr = detect_anomalies(model, input_sequences, labels, top_k=min(num_predicted, len(unique_events)))
-                all_groups.add(group)
-                #print(anomalies)
-                if anomalies[0] == True:
-                    detected.add(group)
-                    if group not in anom:
-                        #print(debugstr)
-                        pass
-                    #result = detector.detect_anomaly(model, seq[:-1], seq[-1])
-                    #result_line[3] = result
-                    #print("Sending the detector result: {}".format(result_line))
-                    #zmq_pub_socket.send_string("{}:{}".format(zmq_detector_top, json.dumps(result_line)))
+                for g in [group] + timeout_groups:
+                    #print(str(g) + ': ' + str(seqs[g]))
+                    data_tensor = torch.FloatTensor([seqs[g]])
+                    input_sequences = data_tensor[:, :-1, :]
+                    labels = data_tensor[:, -1, :].squeeze(-1).long()
+                    anomalies, debugstr = detect_anomalies(model, input_sequences, labels, top_k=min(num_predicted, len(unique_events)))
+                    all_groups.add(g)
                     #print(anomalies)
-                if i % 5000 == 0:
-                    i += 1
-                    print(i)
-                    for group in detected:
-                        if group in anom:
-                            tp += 1
-                        else:
-                            fp += 1
-                    for group in all_groups.difference(detected):
-                        if group in anom:
-                            fn += 1
-                        else:
-                            tn += 1
-                    if tp + fp + fn > 0:
-                        print('tp=' + str(tp) + ', tn=' + str(tn) + ', fp=' + str(fp) + ', fn=' + str(fn) + ', tpr=' + str(tp / (tp + fn)) + ', fpr=' + str(fp / (fp + tn)) + ', f1=' + str(tp / (tp + 0.5 * (fp + fn))))
-                    #else:
-                    #    print('NaN')
-                    tp = 0
-                    fp = 0
-                    tn = 0
-                    fn = 0
-                    detected = set()
-                    all_groups = set()
+                    #print(debugstr)
+                    if anomalies[0] == True:
+                        detected.add(g)
+                        if g not in anom:
+                            #print(debugstr)
+                            pass
+                        #result = detector.detect_anomaly(model, seq[:-1], seq[-1])
+                        #result_line[3] = result
+                        #print("Sending the detector result: {}".format(result_line))
+                        #zmq_pub_socket.send_string("{}:{}".format(zmq_detector_top, json.dumps(result_line)))
+                        #print(anomalies)
                 zmq_pub_socket.send_string("{}:{}".format(zmq_detector_top, "1"))
+            #for timeout_group in timeout_groups:
+            #for det_group in detected:
+            #    if det_group in anom:
+            #        tp += 1
+            #    else:
+            #        fp += 1
+            #for det_group in all_groups.difference(detected):
+            #    if det_group in anom:
+            #        fn += 1
+            #    else:
+            #        tn += 1
+            #detected = set()
+            #all_groups = set()
+            #print('Remove group of length ' + str(len(seqs[timeout_group])))
+            #del seqs[timeout_group]
+            if time.time() > next_print_time:
+                next_print_time = time.time() + print_time
+                for det_group in detected:
+                    if det_group in anom:
+                        tp += 1
+                    else:
+                        fp += 1
+                for det_group in all_groups.difference(detected):
+                    if det_group in anom:
+                        fn += 1
+                    else:
+                        tn += 1
+                if tp + fn > 0 and fp + tn > 0 and fp + fn > 0:
+                    print('total=' + str(tot_cnt) + ', tp=' + str(tp) + ', tn=' + str(tn) + ', fp=' + str(fp) + ', fn=' + str(fn) + ', tpr=' + str(tp / (tp + fn)) + ', fpr=' + str(fp / (fp + tn)) + ', f1=' + str(tp / (tp + 0.5 * (fp + fn))))
+                else:
+                    print('total=' + str(tot_cnt) + ', tp=' + str(tp) + ', tn=' + str(tn) + ', fp=' + str(fp) + ', fn=' + str(fn))
+                tp = 0
+                fp = 0
+                tn = 0
+                fn = 0
+                detected = set()
+                all_groups = set()
+            for timeout_group in timeout_groups:
+                del seqs[timeout_group]
     except KeyboardInterrupt:
         zmq_pub_socket.close()
         zmq_sub_socket.close()
